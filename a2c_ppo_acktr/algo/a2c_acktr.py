@@ -29,7 +29,6 @@ class A2C_ACKTR():
 
         self.beta_actor_list = []
         self.param_list = []
-        print(actor_critic.named_parameters())
         for name, param in actor_critic.named_parameters():
             if "base.beta_net_actor" in name :
                 self.beta_actor_list.append(param)
