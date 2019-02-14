@@ -15,6 +15,9 @@ class Flatten(nn.Module):
 class Policy(nn.Module):
     def __init__(self, obs_shape, action_space, base=None, base_kwargs=None):
         super(Policy, self).__init__()
+        self.prev_mean = None # Nishanth: prev mean
+        self.prev_mean_eval_actions = None
+
         if base_kwargs is None:
             base_kwargs = {}
         if base is None:
@@ -43,6 +46,7 @@ class Policy(nn.Module):
     def is_recurrent(self):
         return self.base.is_recurrent
 
+
     @property
     def recurrent_hidden_state_size(self):
         """Size of rnn_hx."""
@@ -51,9 +55,11 @@ class Policy(nn.Module):
     def forward(self, inputs, rnn_hxs, masks):
         raise NotImplementedError
 
+    # Nishanth: adding beta output from the net
     def act(self, inputs, rnn_hxs, masks, deterministic=False):
-        value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
-        dist = self.dist(actor_features)
+        value, actor_features, rnn_hxs, beta_actor = self.base(inputs, rnn_hxs, masks)
+        dist = self.dist(actor_features, prev_mean=self.prev_mean, beta_actor=beta_actor)
+        self.prev_mean = dist.mode()
 
         if deterministic:
             action = dist.mode()
@@ -66,18 +72,27 @@ class Policy(nn.Module):
         return value, action, action_log_probs, rnn_hxs
 
     def get_value(self, inputs, rnn_hxs, masks):
-        value, _, _ = self.base(inputs, rnn_hxs, masks)
+        value, _, _, _ = self.base(inputs, rnn_hxs, masks)
         return value
 
     def evaluate_actions(self, inputs, rnn_hxs, masks, action):
-        value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
-        dist = self.dist(actor_features)
+        value_list = []
+        action_log_probs = []
+        dist_entropy = []
 
-        action_log_probs = dist.log_probs(action)
-        dist_entropy = dist.entropy().mean()
+        for i in range(inputs.size()[0]):
+            value, actor_features, _, beta_actor = self.base(inputs[i,:,:], rnn_hxs, masks[i,:,:])
+            value_list.append(value)
 
-        return value, action_log_probs, dist_entropy, rnn_hxs
+            dist= self.dist(actor_features, self.prev_mean_eval_actions, beta_actor)
+            self.prev_mean_eval_actions = dist.mode()
+            action_log_probs.append(dist.log_probs(action[i,:,:]))
+            dist_entropy.append(dist.entropy())
 
+        action_log_probs = torch.stack(action_log_probs)
+        dist_entropy = torch.stack(dist_entropy).mean()
+        v = torch.stack(value_list)
+        return v, action_log_probs, dist_entropy, rnn_hxs
 
 class NNBase(nn.Module):
 
@@ -171,8 +186,10 @@ class NNBase(nn.Module):
 
 
 class CNNBase(NNBase):
-    def __init__(self, num_inputs, recurrent=False, hidden_size=512):
+    def __init__(self, num_inputs, recurrent=False, hidden_size=512, est_beta):
         super(CNNBase, self).__init__(recurrent, hidden_size, hidden_size)
+
+        self.est_beta = est_beta
 
         init_ = lambda m: init(m,
             nn.init.orthogonal_,
@@ -197,6 +214,12 @@ class CNNBase(NNBase):
 
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
 
+        # Nishanth: added beta net here
+        self.beta_actor_net = nn.Sequential(
+            init_(nn.Linear(hidden_size, 1),
+            nn.Tanh())
+        )
+
         self.train()
 
     def forward(self, inputs, rnn_hxs, masks):
@@ -205,12 +228,20 @@ class CNNBase(NNBase):
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
 
-        return self.critic_linear(x), x, rnn_hxs
+        if est_beta:
+            beta_actor = self.beta_actor_net(x)
+        else:
+            # to do: set beta_actor to all ones
+            beta_actor = torch.ones_like(masks)
+
+        return self.critic_linear(x), x, rnn_hxs, beta_actor
 
 
 class MLPBase(NNBase):
-    def __init__(self, num_inputs, recurrent=False, hidden_size=64):
+    def __init__(self, num_inputs, recurrent=False, hidden_size=64, est_beta=True):
         super(MLPBase, self).__init__(recurrent, num_inputs, hidden_size)
+
+        self.est_beta = est_beta
 
         if recurrent:
             num_inputs = hidden_size
@@ -236,6 +267,12 @@ class MLPBase(NNBase):
 
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
 
+        # Nishanth: added beta net here
+        self.beta_actor_net = nn.Sequential(
+            init_(nn.Linear(hidden_size, 1)),
+            nn.Sigmoid()
+        )
+
         self.train()
 
     def forward(self, inputs, rnn_hxs, masks):
@@ -247,4 +284,11 @@ class MLPBase(NNBase):
         hidden_critic = self.critic(x)
         hidden_actor = self.actor(x)
 
-        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
+        if self.est_beta:
+            beta_actor = self.beta_actor_net(self.actor(x))
+
+        else:
+            # to do: set beta_actor to all ones
+            beta_actor = torch.ones_like(masks)
+
+        return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs, beta_actor
