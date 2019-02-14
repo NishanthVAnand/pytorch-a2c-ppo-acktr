@@ -186,7 +186,7 @@ class NNBase(nn.Module):
 
 
 class CNNBase(NNBase):
-    def __init__(self, num_inputs, recurrent=False, hidden_size=512, est_beta=est_beta):
+    def __init__(self, num_inputs, recurrent=False, hidden_size=512, est_beta=True):
         super(CNNBase, self).__init__(recurrent, hidden_size, hidden_size)
 
         self.est_beta = est_beta
@@ -228,17 +228,16 @@ class CNNBase(NNBase):
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
 
-        if est_beta:
+        if self.est_beta:
             beta_actor = self.beta_actor_net(x)
         else:
-            # to do: set beta_actor to all ones
             beta_actor = torch.ones_like(masks)
 
         return self.critic_linear(x), x, rnn_hxs, beta_actor
 
 
 class MLPBase(NNBase):
-    def __init__(self, num_inputs, recurrent=False, hidden_size=64, est_beta=est_beta):
+    def __init__(self, num_inputs, recurrent=False, hidden_size=64, est_beta=True):
         super(MLPBase, self).__init__(recurrent, num_inputs, hidden_size)
 
         self.est_beta = est_beta
