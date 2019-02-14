@@ -186,7 +186,7 @@ class NNBase(nn.Module):
 
 
 class CNNBase(NNBase):
-    def __init__(self, num_inputs, recurrent=False, hidden_size=512, est_beta):
+    def __init__(self, num_inputs, recurrent=False, hidden_size=512, est_beta=est_beta):
         super(CNNBase, self).__init__(recurrent, hidden_size, hidden_size)
 
         self.est_beta = est_beta
@@ -238,7 +238,7 @@ class CNNBase(NNBase):
 
 
 class MLPBase(NNBase):
-    def __init__(self, num_inputs, recurrent=False, hidden_size=64, est_beta=True):
+    def __init__(self, num_inputs, recurrent=False, hidden_size=64, est_beta=est_beta):
         super(MLPBase, self).__init__(recurrent, num_inputs, hidden_size)
 
         self.est_beta = est_beta
