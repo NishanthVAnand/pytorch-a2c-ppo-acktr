@@ -59,7 +59,7 @@ class Policy(nn.Module):
     def act(self, inputs, rnn_hxs, masks, deterministic=False):
         value, actor_features, rnn_hxs, beta_actor = self.base(inputs, rnn_hxs, masks)
         dist = self.dist(actor_features, prev_mean=self.prev_mean, beta_actor=beta_actor)
-        self.prev_mean = dist.mode()
+        self.prev_mean = dist.mode().type(torch.FloatTensor)
 
         if deterministic:
             action = dist.mode()
@@ -85,7 +85,7 @@ class Policy(nn.Module):
             value_list.append(value)
 
             dist= self.dist(actor_features, self.prev_mean_eval_actions, beta_actor)
-            self.prev_mean_eval_actions = dist.mode()
+            self.prev_mean_eval_actions = dist.mode().type(torch.FloatTensor)
             action_log_probs.append(dist.log_probs(action[i,:,:]))
             dist_entropy.append(dist.entropy())
 
@@ -186,10 +186,10 @@ class NNBase(nn.Module):
 
 
 class CNNBase(NNBase):
-    def __init__(self, num_inputs, recurrent=False, hidden_size=512, est_beta=True):
+    def __init__(self, num_inputs, recurrent=False, hidden_size=512, est_beta_actor=True):
         super(CNNBase, self).__init__(recurrent, hidden_size, hidden_size)
 
-        self.est_beta = est_beta
+        self.est_beta = est_beta_actor
 
         init_ = lambda m: init(m,
             nn.init.orthogonal_,
@@ -237,10 +237,10 @@ class CNNBase(NNBase):
 
 
 class MLPBase(NNBase):
-    def __init__(self, num_inputs, recurrent=False, hidden_size=64, est_beta=True):
+    def __init__(self, num_inputs, recurrent=False, hidden_size=64, est_beta_actor=True):
         super(MLPBase, self).__init__(recurrent, num_inputs, hidden_size)
 
-        self.est_beta = est_beta
+        self.est_beta = est_beta_actor
 
         if recurrent:
             num_inputs = hidden_size

@@ -60,10 +60,10 @@ class Categorical(nn.Module):
 
         self.linear = init_(nn.Linear(num_inputs, num_outputs))
 
-    def forward(self, x, prev_x=None, beta_actor=1):
+    def forward(self, x, prev_mean=None, beta_actor=1):
         x = self.linear(x)
-        if prev_prob is not None:
-            x = beta_actor * x + (1 - beta_actor) * prev_x
+        if prev_mean is not None:
+            x = beta_actor * x + (1 - beta_actor) * prev_mean
         return FixedCategorical(logits=x)
 
 
@@ -102,8 +102,8 @@ class Bernoulli(nn.Module):
 
         self.linear = init_(nn.Linear(num_inputs, num_outputs))
 
-    def forward(self, x, prev_x=None, beta_actor=1):
+    def forward(self, x, prev_mean=None, beta_actor=1):
         x = self.linear(x)
-        if prev_x is not None:
-            x = beta_actor * x + (1 - beta_actor) * prev_x
+        if prev_mean is not None:
+            x = beta_actor * x + (1 - beta_actor) * prev_mean
         return FixedBernoulli(logits=x)
