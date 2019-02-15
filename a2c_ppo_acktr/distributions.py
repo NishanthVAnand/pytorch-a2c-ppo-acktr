@@ -81,8 +81,7 @@ class DiagGaussian(nn.Module):
     def forward(self, x, prev_mean=None, beta_actor=1):
         action_mean = self.fc_mean(x)
         if prev_mean is not None:
-            action_mean = beta_actor * action_mean + (1 - beta_actor) * prev_meanß
-
+            action_mean = beta_actor * action_mean + (1 - beta_actor) * prev_mean
         #  An ugly hack for my KFAC implementation.
         zeros = torch.zeros(action_mean.size())
         if x.is_cuda:
