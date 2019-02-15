@@ -15,8 +15,8 @@ class Flatten(nn.Module):
 class Policy(nn.Module):
     def __init__(self, obs_shape, action_space, base=None, base_kwargs=None):
         super(Policy, self).__init__()
-        self.prev_mean = None # Nishanth: prev mean
-        self.prev_mean_eval_actions = None
+        # self.prev_mean = None # Nishanth: prev mean
+        # self.prev_mean_eval_actions = None
 
         if base_kwargs is None:
             base_kwargs = {}
@@ -56,10 +56,10 @@ class Policy(nn.Module):
         raise NotImplementedError
 
     # Nishanth: adding beta output from the net
-    def act(self, inputs, rnn_hxs, masks, deterministic=False):
+    def act(self, inputs, rnn_hxs, masks, prev_mean=None, deterministic=False):
         value, actor_features, rnn_hxs, beta_actor = self.base(inputs, rnn_hxs, masks)
-        dist = self.dist(actor_features, prev_mean=self.prev_mean, beta_actor=beta_actor)
-        self.prev_mean = dist.mode().type(torch.FloatTensor)
+        dist = self.dist(actor_features, prev_mean, beta_actor=beta_actor)
+        prev_mean = dist.mode().type(torch.FloatTensor)
 
         if deterministic:
             action = dist.mode()
@@ -69,13 +69,13 @@ class Policy(nn.Module):
         action_log_probs = dist.log_probs(action)
         dist_entropy = dist.entropy().mean()
 
-        return value, action, action_log_probs, rnn_hxs
+        return value, action, action_log_probs, rnn_hxs, prev_mean
 
     def get_value(self, inputs, rnn_hxs, masks):
         value, _, _, _ = self.base(inputs, rnn_hxs, masks)
         return value
 
-    def evaluate_actions(self, inputs, rnn_hxs, masks, action):
+    def evaluate_actions(self, inputs, rnn_hxs, masks, action, eval_prev_mean=None):
         value_list = []
         action_log_probs = []
         dist_entropy = []
@@ -84,15 +84,17 @@ class Policy(nn.Module):
             value, actor_features, _, beta_actor = self.base(inputs[i,:,:], rnn_hxs, masks[i,:,:])
             value_list.append(value)
 
-            dist= self.dist(actor_features, self.prev_mean_eval_actions, beta_actor)
-            self.prev_mean_eval_actions = dist.mode().type(torch.FloatTensor)
+            dist = self.dist(actor_features, eval_prev_mean, beta_actor)
+            eval_prev_mean = dist.mode().type(torch.FloatTensor)
             action_log_probs.append(dist.log_probs(action[i,:,:]))
             dist_entropy.append(dist.entropy())
+            if not masks[i,:,:]:
+                eval_prev_mean = None
 
         action_log_probs = torch.stack(action_log_probs)
         dist_entropy = torch.stack(dist_entropy).mean()
         v = torch.stack(value_list)
-        return v, action_log_probs, dist_entropy, rnn_hxs
+        return v, action_log_probs, dist_entropy, rnn_hxs, eval_prev_mean
 
 class NNBase(nn.Module):
 

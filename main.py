@@ -108,15 +108,19 @@ def main():
             agent.clip_param = args.clip_param  * (1 - j / float(num_updates))
 
         for step in range(args.num_steps):
+            prev_mean=None
             # Sample actions
             with torch.no_grad():
-                value, action, action_log_prob, recurrent_hidden_states = actor_critic.act(
+                value, action, action_log_prob, recurrent_hidden_states, prev_mean = actor_critic.act(
                         rollouts.obs[step],
                         rollouts.recurrent_hidden_states[step],
-                        rollouts.masks[step])
+                        rollouts.masks[step], prev_mean)
 
             # Obser reward and next obs
             obs, reward, done, infos = envs.step(action)
+
+            if done:
+                prev_mean = None
 
             for info in infos:
                 if 'episode' in info.keys():

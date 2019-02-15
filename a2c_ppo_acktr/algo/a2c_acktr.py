@@ -23,6 +23,7 @@ class A2C_ACKTR():
         self.entropy_coef = entropy_coef
 
         self.max_grad_norm = max_grad_norm
+        self.first_update = True
 
         if acktr:
             self.optimizer = KFACOptimizer(actor_critic)
@@ -45,11 +46,16 @@ class A2C_ACKTR():
         action_shape = rollouts.actions.size()[-1]
         num_steps, num_processes, _ = rollouts.rewards.size()
 
-        values, action_log_probs, dist_entropy, _ = self.actor_critic.evaluate_actions(
+        if self.first_update:
+            eval_prev_mean = None
+            self.first_update = False
+
+        values, action_log_probs, dist_entropy, _, eval_prev_mean = self.actor_critic.evaluate_actions(
             rollouts.obs[:-1],
             rollouts.recurrent_hidden_states[0],
             rollouts.masks[:-1],
-            rollouts.actions)
+            rollouts.actions,
+            eval_prev_mean)
 
         action_log_probs = action_log_probs.view(num_steps, num_processes, 1)
 
