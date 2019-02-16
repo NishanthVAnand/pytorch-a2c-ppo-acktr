@@ -60,6 +60,17 @@ class Policy(nn.Module):
         value, actor_features, rnn_hxs, beta_actor = self.base(inputs, rnn_hxs, masks)
         dist = self.dist(actor_features, prev_mean, beta_actor=beta_actor)
         prev_mean = dist.mode().type(torch.FloatTensor)
+        
+        prev_m = []
+        for idx, m in enumerate(masks):
+            if m:
+                prev_m.append(prev_mean[idx])
+            else:
+                prev_m.append(None)
+         
+        prev_mean = torch.stack(prev_m)
+
+        print(masks, prev_mean, "\n******")
 
         if deterministic:
             action = dist.mode()
@@ -88,8 +99,15 @@ class Policy(nn.Module):
             eval_prev_mean = dist.mode().type(torch.FloatTensor)
             action_log_probs.append(dist.log_probs(action[i,:,:]))
             dist_entropy.append(dist.entropy())
-            if not masks[i,:,:]:
-                eval_prev_mean = None
+            
+            eval_prev_m = []
+            for idx, eval_m in enumerate(masks[i,:,:]):
+                if not eval_m:
+                    eval_prev_m.append(None)
+                else:
+                    eval_prev_m.append(eval_prev_mean[idx])
+
+            eval_prev_mean = torch.stack(eval_prev_m)
 
         action_log_probs = torch.stack(action_log_probs)
         dist_entropy = torch.stack(dist_entropy).mean()
