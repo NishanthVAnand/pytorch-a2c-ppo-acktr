@@ -1,3 +1,5 @@
+from comet_ml import Experiment
+
 import copy
 import glob
 import os
@@ -26,6 +28,9 @@ assert args.algo in ['a2c', 'ppo', 'acktr']
 if args.recurrent_policy:
     assert args.algo in ['a2c', 'ppo'], \
         'Recurrent policy is not implemented for ACKTR'
+
+experiment = Experiment(api_key="tSACzCGFcetSBTapGBKETFARf",
+                        project_name="recurrent-policy", workspace="nishanthvanand",disabled=args.disable_log,)
 
 num_updates = int(args.num_env_steps) // args.num_steps // args.num_processes
 
@@ -95,6 +100,7 @@ def main():
 
     start = time.time()
     for j in range(num_updates):
+        beta_actor_list = []
         prev_mean = None
         eval_prev_mean = None
 
@@ -112,13 +118,14 @@ def main():
         for step in range(args.num_steps):
             # Sample actions
             with torch.no_grad():
-                value, action, action_log_prob, recurrent_hidden_states, prev_mean = actor_critic.act(
+                value, action, action_log_prob, recurrent_hidden_states, prev_mean, beta_actor = actor_critic.act(
                         rollouts.obs[step],
                         rollouts.recurrent_hidden_states[step],
                         rollouts.masks[step], prev_mean)
 
             # Obser reward and next obs
             obs, reward, done, infos = envs.step(action)
+            beta_actor_list.append(beta_actor.numpy())
 
             for info in infos:
                 if 'episode' in info.keys():
@@ -171,6 +178,10 @@ def main():
                        np.min(episode_rewards),
                        np.max(episode_rewards), dist_entropy,
                        value_loss, action_loss))
+            experiment.log_metrics({"mean reward": np.mean(episode_rewards),
+                                 "Value loss": value_loss, "Action Loss": action_loss,"Beta mean": np.array(beta_actor_list).mean(),
+                                 "Beta std": np.array(beta_actor_list).std()}, 
+                                 step=j * args.num_steps * args.num_processes)
 
         if (args.eval_interval is not None
                 and len(episode_rewards) > 1
