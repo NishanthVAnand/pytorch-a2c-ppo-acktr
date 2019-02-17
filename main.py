@@ -146,6 +146,13 @@ def main():
         value_loss, action_loss, dist_entropy, eval_prev_mean = agent.update(rollouts, eval_prev_mean)
 
         rollouts.after_update()
+        
+        print(beta_actor_list)
+        experiment.log_metrics({"mean reward": np.mean(episode_rewards),
+                                 "Value loss": value_loss, "Action Loss": action_loss,"Beta mean": np.array(beta_actor_list).mean(),
+                                 "Beta std": np.array(beta_actor_list).std()}, 
+                                 step=j * args.num_steps * args.num_processes)
+
 
         # save for every interval-th episode or for the last epoch
         if (j % args.save_interval == 0 or j == num_updates - 1) and args.save_dir != "":
@@ -178,11 +185,7 @@ def main():
                        np.min(episode_rewards),
                        np.max(episode_rewards), dist_entropy,
                        value_loss, action_loss))
-            experiment.log_metrics({"mean reward": np.mean(episode_rewards),
-                                 "Value loss": value_loss, "Action Loss": action_loss,"Beta mean": np.array(beta_actor_list).mean(),
-                                 "Beta std": np.array(beta_actor_list).std()}, 
-                                 step=j * args.num_steps * args.num_processes)
-
+           
         if (args.eval_interval is not None
                 and len(episode_rewards) > 1
                 and j % args.eval_interval == 0):
