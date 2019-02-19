@@ -12,6 +12,7 @@ class A2C_ACKTR():
                  entropy_coef,
                  lr=None,
                  lr_beta=None,
+                 reg_beta=None,
                  eps=None,
                  alpha=None,
                  max_grad_norm=None,
@@ -38,7 +39,7 @@ class A2C_ACKTR():
         else:
             # Pierre: separate learning rates for beta net and actor net
             self.optimizer = optim.RMSprop([{'params': self.param_list},
-                 {'params': self.beta_actor_list, 'lr': lr_beta, 'weight_decay':0.01}], lr, eps=eps, alpha=alpha)
+                 {'params': self.beta_actor_list, 'lr': lr_beta, 'weight_decay':reg_beta}], lr, eps=eps, alpha=alpha)
 
     def update(self, rollouts, eval_prev_mean):
         # Nishanth: modified shape to make compatible to the function call
